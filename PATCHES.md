@@ -13,3 +13,12 @@ boundary fell inside a multibyte character, `MacTextSystem::layout_line` panicke
 with "byte index is not a char boundary", for example on `I’d pick the Dyson…`.
 The patch truncates a per-measurement copy of the runs. Upstream Zed fixed the same
 bug by making `truncate_line` borrow the runs and return new ones.
+
+## Closing punctuation stays with its word
+
+`LineWrapper::wrap_line` (and the shaped-line wrapping in `line_layout.rs`, which
+duplicates it) treated every non-word character as a place to break before. A line
+that overflowed at a `?`, `!`, `;`, `)` or similar therefore left that character alone
+at the start of the next line. `LineWrapper::is_closing_punctuation` lists characters
+that must not start a line; they no longer add a break candidate, so the whole word
+moves down with them. Opening punctuation and CJK text still break as before.

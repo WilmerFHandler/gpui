@@ -63,6 +63,8 @@ impl LineWrapper {
                                 last_candidate_ix = ix;
                                 last_candidate_width = width;
                             }
+                        } else if Self::is_closing_punctuation(c) {
+                            // Never a place to break: it stays with the text before it.
                         } else {
                             // CJK may not be space separated, e.g.: `Hello world你好世界`
                             if c != ' ' && first_non_whitespace_ix.is_some() {
@@ -187,6 +189,18 @@ impl LineWrapper {
         matches!(c, '-' | '_' | '.' | '\'' | '$' | '%' | '@' | '#' | '^' | '~' | ',' | '=' | ':') ||
         // `⋯` character is special used in Zed, to keep this at the end of the line.
         matches!(c, '⋯')
+    }
+
+    /// Punctuation that must not start a line, so a wrap before it would leave it
+    /// alone at the start of the next line, e.g. the `?` in `which project is this?`.
+    pub(crate) fn is_closing_punctuation(c: char) -> bool {
+        matches!(
+            c,
+            '?' | '!' | ';' | ')' | ']' | '}' | '…' | '’' | '”' | '»' | '›'
+            // CJK and fullwidth closers.
+            | '、' | '。' | '，' | '．' | '：' | '；' | '！' | '？' | '）' | '］' | '｝'
+            | '」' | '』' | '】' | '〉' | '》'
+        )
     }
 
     #[inline(always)]
@@ -483,6 +497,39 @@ mod tests {
                 Boundary::new(12, 0),
                 Boundary::new(18, 0)
             ],
+        );
+    }
+
+    #[test]
+    fn test_wrap_line_keeps_closing_punctuation_with_its_word() {
+        let mut wrapper = build_wrapper();
+
+        // "this?" is 5 wide: only the `?` overflows the 72 wide line (9 chars at 8).
+        assert_eq!(
+            wrapper
+                .wrap_line(&[LineFragment::text("aaaa bbbb?")], px(72.))
+                .collect::<Vec<_>>(),
+            &[Boundary::new(5, 0)],
+        );
+        assert_eq!(
+            wrapper
+                .wrap_line(&[LineFragment::text("aaaa bbbb)")], px(72.))
+                .collect::<Vec<_>>(),
+            &[Boundary::new(5, 0)],
+        );
+        // Opening punctuation can still start a line.
+        assert_eq!(
+            wrapper
+                .wrap_line(&[LineFragment::text("aaaa (bbbb")], px(72.))
+                .collect::<Vec<_>>(),
+            &[Boundary::new(5, 0)],
+        );
+        // A word longer than the line still breaks inside it.
+        assert_eq!(
+            wrapper
+                .wrap_line(&[LineFragment::text("aaaaaaaaaaaaaaaaaaaaaaaa?")], px(72.))
+                .collect::<Vec<_>>(),
+            &[Boundary::new(9, 0), Boundary::new(18, 0)],
         );
     }
 

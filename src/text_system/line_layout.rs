@@ -169,7 +169,7 @@ impl LineLayout {
                     last_candidate_ix = Some(boundary);
                     last_candidate_x = x;
                 }
-            } else {
+            } else if !LineWrapper::is_closing_punctuation(ch) {
                 if ch != ' ' && first_non_whitespace_ix.is_some() {
                     last_candidate_ix = Some(boundary);
                     last_candidate_x = x;
