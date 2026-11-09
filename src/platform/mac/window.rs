@@ -476,10 +476,11 @@ impl MacWindowState {
     fn start_display_link(&mut self) {
         self.stop_display_link();
         unsafe {
-            if !self
-                .native_window
-                .occlusionState()
-                .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
+            if !background_windows()
+                && !self
+                    .native_window
+                    .occlusionState()
+                    .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
             {
                 return;
             }
@@ -846,7 +847,9 @@ impl MacWindow {
                 }
             }
 
-            if focus && show {
+            if show && background_windows() {
+                let _: () = msg_send![native_window, orderBack: nil];
+            } else if focus && show {
                 native_window.makeKeyAndOrderFront_(nil);
             } else if show {
                 native_window.orderFront_(nil);
@@ -1904,6 +1907,13 @@ extern "C" fn handle_view_event(this: &Object, _: Sel, native_event: id) {
     }
 }
 
+/// `GPUI_BACKGROUND_WINDOWS=1` opens windows behind every other window and keeps drawing them
+/// while covered, so automated screenshots can run without getting in the user's way.
+fn background_windows() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("GPUI_BACKGROUND_WINDOWS").is_some())
+}
+
 extern "C" fn window_did_change_occlusion_state(this: &Object, _: Sel, _: id) {
     let window_state = unsafe { get_window_state(this) };
     let lock = &mut *window_state.lock();
@@ -1915,7 +1925,7 @@ extern "C" fn window_did_change_occlusion_state(this: &Object, _: Sel, _: id) {
         {
             lock.move_traffic_light();
             lock.start_display_link();
-        } else {
+        } else if !background_windows() {
             lock.stop_display_link();
         }
     }
